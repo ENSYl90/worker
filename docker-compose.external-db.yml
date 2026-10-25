@@ -1,0 +1,231 @@
+version: "3.8"
+
+services:
+
+  # =====================================================
+  # NGINX
+  # Serves public/ and proxies PHP requests to app:9000
+  # =====================================================
+
+  nginx:
+
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+
+    image: glover-nginx:latest
+
+    restart: unless-stopped
+
+    ports:
+      - "${APP_PORT:-3030}:3030"
+
+    volumes:
+      - glover-public:/var/www/html/public-shared:ro
+
+    depends_on:
+      - app
+
+    networks:
+      - glover-network
+
+
+  # =====================================================
+  # GLOVER APPLICATION
+  # Laravel + PHP-FPM
+  # =====================================================
+
+  app:
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: glover-app:latest
+
+    restart: unless-stopped
+
+    environment:
+
+      APP_NAME: ${APP_NAME:-Glover}
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL}
+
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+
+      DB_CONNECTION: mysql
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+
+      BROADCAST_CONNECTION: reverb
+
+      REVERB_APP_ID: ${REVERB_APP_ID}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+
+      REVERB_HOST: ${REVERB_HOST}
+      REVERB_PORT: 6001
+      REVERB_SCHEME: ${REVERB_SCHEME:-https}
+
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+
+    volumes:
+      - glover-storage:/var/www/html/storage
+      - glover-public:/var/www/html/public-shared
+
+    networks:
+      - glover-network
+
+
+  # =====================================================
+  # QUEUE WORKER
+  # Notifications, emails, order processing
+  # =====================================================
+
+  worker:
+
+    image: glover-app:latest
+
+    restart: unless-stopped
+
+    command:
+      sh -c "php artisan queue:work redis --sleep=3 --tries=3 --timeout=120"
+
+    environment:
+
+      CONTAINER_ROLE: worker
+
+      APP_ENV: ${APP_ENV:-production}
+
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+
+    volumes:
+      - glover-storage:/var/www/html/storage
+
+    depends_on:
+      - app
+
+    networks:
+      - glover-network
+
+
+  # =====================================================
+  # Laravel Scheduler
+  # =====================================================
+
+  scheduler:
+
+    image: glover-app:latest
+
+    restart: unless-stopped
+
+    command:
+      sh -c "while true; do php artisan schedule:run; sleep 60; done"
+
+    environment:
+
+      CONTAINER_ROLE: scheduler
+
+      APP_ENV: ${APP_ENV:-production}
+
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+
+    volumes:
+      - glover-storage:/var/www/html/storage
+
+    depends_on:
+      - app
+
+    networks:
+      - glover-network
+
+
+  # =====================================================
+  # REVERB
+  # Websocket server for broadcasting
+  # =====================================================
+
+  reverb:
+
+    image: glover-app:latest
+
+    restart: unless-stopped
+
+    command:
+      sh -c "php artisan reverb:start --host=0.0.0.0 --port=6001"
+
+    environment:
+
+      CONTAINER_ROLE: reverb
+
+      APP_ENV: ${APP_ENV:-production}
+
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+
+      REVERB_APP_ID: ${REVERB_APP_ID}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: 6001
+
+    volumes:
+      - glover-storage:/var/www/html/storage
+
+    depends_on:
+      - app
+
+    networks:
+      - glover-network
+
+
+networks:
+
+  glover-network:
+    driver: bridge
+
+
+volumes:
+
+  glover-storage:
+  glover-public:

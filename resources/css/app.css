@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "~filepond/dist/filepond.min.css";
+@import "~filepond-plugin-image-preview/dist/filepond-plugin-image-preview.min.css";
+@import '~intl-tel-input/build/css/intlTelInput.css';
+
+/* Livewire Tables Pagination Fix */
+nav[aria-label="Pagination Navigation"] > div {
+    @apply w-full;
+}
+
+/* Ensure only one pagination section shows at a time */
+@media (max-width: 767px) {
+    nav[aria-label="Pagination Navigation"] .hidden.md\:flex-1 {
+        @apply !hidden;
+    }
+}
+
+@media (min-width: 768px) {
+    nav[aria-label="Pagination Navigation"] .md\:hidden {
+        @apply !hidden;
+    }
+}

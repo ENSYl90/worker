@@ -1,0 +1,127 @@
+# ==============================================================================
+# Stage 1: Composer dependencies
+# ==============================================================================
+FROM composer:2.7 AS composer_builder
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --no-scripts \
+    --no-autoloader \
+    --ignore-platform-req=ext-gd \
+    --ignore-platform-req=ext-exif
+
+
+# ==============================================================================
+# Stage 2: Frontend build (Laravel Mix + npm)
+# ==============================================================================
+FROM node:20-alpine AS frontend_builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json webpack.mix.js tailwind.config.js artisan ./
+
+COPY resources ./resources
+COPY public ./public
+
+RUN npm ci \
+    && npm run prod
+
+
+# ==============================================================================
+# Stage 3: Runtime image (PHP-FPM + Nginx + Reverb + queue + scheduler, via Supervisor)
+# ==============================================================================
+FROM php:8.2-fpm-alpine
+
+WORKDIR /var/www/html
+
+RUN apk add --no-cache \
+    bash \
+    nginx \
+    supervisor \
+    curl \
+    su-exec \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    libzip-dev \
+    zip \
+    icu-dev \
+    oniguruma-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_mysql \
+        mbstring \
+        exif \
+        pcntl \
+        bcmath \
+        gd \
+        zip \
+        intl \
+        opcache \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
+
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+COPY docker/php/opcache.ini "$PHP_INI_DIR/conf.d/opcache.ini"
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/www.conf
+
+COPY docker/nginx-app.conf /etc/nginx/http.d/default.conf
+RUN rm -f /etc/nginx/http.d/default.conf.default 2>/dev/null || true
+
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+COPY --chown=www-data:www-data . .
+
+COPY --from=composer_builder \
+    /usr/bin/composer \
+    /usr/bin/composer
+
+COPY --from=composer_builder \
+    --chown=www-data:www-data \
+    /app/vendor \
+    ./vendor
+
+COPY --from=frontend_builder \
+    --chown=www-data:www-data \
+    /app/public \
+    ./public
+
+RUN mkdir -p storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/testing \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+RUN [ -f .env ] || cp .env.example .env
+
+RUN composer dump-autoload \
+    --no-dev \
+    --optimize \
+    && chown www-data:www-data vendor/composer/autoload_*.php vendor/composer/ClassLoader.php vendor/autoload.php
+
+COPY docker/entrypoint-app.sh /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=140s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fs http://127.0.0.1:3000/ || exit 1
+
+ENTRYPOINT ["entrypoint.sh"]
+
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

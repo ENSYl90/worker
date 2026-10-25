@@ -1,0 +1,15 @@
+<div style="background:#f9fafb;padding:32px 0;">
+    <div style="max-width:480px;margin:0 auto;padding:48px;background:#fff;border-radius:2px;">
+        <img src="{{website_logo}}" alt="logo" style="max-height:80px;margin:16px 0 40px;display:block;" />
+        <div>
+            <p style="font-size:14px;">Hello {{user_name}},</p>
+            <p style="font-weight:bold;font-size:24px;margin:16px 0;">Login/Reset Password</p>
+            <p>It looks like you're trying to log in to your account or reseting account password. To complete the process, please use the one-time password (OTP) below:</p>
+        </div>
+        <div style="background:#3b82f6;padding:32px;text-align:center;margin:24px 0;font-size:24px;border:1px solid #e5e7eb;">
+            <p>{{otp}}</p>
+        </div>
+        <p style="font-weight:200;font-size:14px;">This code expires in 5 minutes.</p>
+        {{download_buttons}}
+    </div>
+</div>

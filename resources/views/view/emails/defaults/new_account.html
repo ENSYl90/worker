@@ -1,0 +1,23 @@
+<div style="background:#f3f4f6;">
+    <div style="max-width:480px;margin:0 auto;padding:24px;">
+        <img src="{{website_logo}}" alt="logo" style="width:96px;height:96px;margin:24px auto 32px;display:block;" />
+        <div>
+            <p style="font-weight:bold;font-size:24px;margin-bottom:8px;">Welcome</p>
+            <p>
+                Hi <span style="font-weight:bold;">{{user_name}},</span>
+                we're glad you're here! You have just created an account with
+                <b>{{app_name}}.</b>
+            </p>
+        </div>
+        <div style="background:#fff;padding:32px;text-align:center;margin:24px 0;border:1px solid #e5e7eb;">
+            <p style="margin-bottom:12px;">Your account information:</p>
+            <p><span style="font-weight:bold;">Name:</span> {{user_name}}</p>
+            <p><span style="font-weight:bold;">Email:</span> {{user_email}}</p>
+            <div style="margin-top:4px;">
+                <p style="font-size:14px;font-style:italic;">Your generated account password below, feel free to change it from the system</p>
+                <p><span style="font-weight:bold;">Password:</span> {{password}}</p>
+            </div>
+        </div>
+        {{download_buttons}}
+    </div>
+</div>
